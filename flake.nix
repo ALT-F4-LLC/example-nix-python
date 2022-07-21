@@ -1,32 +1,31 @@
 {
-  inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-  };
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
   outputs = { self, nixpkgs }:
-  let
-    system = "x86_64-linux";
-    pkgs = nixpkgs.legacyPackages.${system};
-  in
+    let
+      supportedSystems = [ "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aarch64-darwin" ];
+      forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
+      pkgs = forAllSystems (system: nixpkgs.legacyPackages.${system});
+    in
     {
-      packages.${system}.default = pkgs.poetry2nix.mkPoetryApplication {
-        projectDir = self;
-      };
+      packages = forAllSystems (system: {
+        default = pkgs.${system}.poetry2nix.mkPoetryApplication { projectDir = self; };
+      });
 
-      devShells.${system}.default = pkgs.mkShellNoCC {
-        shellHook = "echo Welcome to your Nix-powered development environment!"; # Shell commands executed when entering the shell
+      devShells = forAllSystems (system: {
+        default = pkgs.${system}.mkShellNoCC {
+          packages = with pkgs.${system}; [
+            (poetry2nix.mkPoetryEnv { projectDir = self; })
+            poetry
+          ];
+        };
+      });
 
-        IS_NIX_AWESOME = "YES!"; # We can set an environment variable either like *this* or inside the shellHook above
-
-        packages = with pkgs; [
-          (poetry2nix.mkPoetryEnv { projectDir = self; })
-          neofetch # Added a non-python dependency to the devshell
-        ];
-      };
-
-      apps.${system}.default = {
-        program = "${self.packages.${system}.default}/bin/start";
-        type = "app";
-      };
+      apps = forAllSystems (system: {
+        default = {
+          program = "${self.packages.${system}.default}/bin/start";
+          type = "app";
+        };
+      });
     };
 }
